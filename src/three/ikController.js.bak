@@ -1,0 +1,81 @@
+// Lightweight analytic IK for UR-style arm (position only, no wrist orientation).
+// Returns an array of 6 joint angles [j0..j5] or null if unreachable.
+
+const L1 = 0.425; // upper arm
+const L2 = 0.392; // forearm
+const BASE_Z = 0.1273; // approximate base to shoulder height
+
+export function createIKChain(initialTarget = { x: 0.4, y: 0.2, z: 0.4 }) {
+  return { target: { ...initialTarget } };
+}
+
+export function solveIK(ik, target) {
+  const tgt = target || ik?.target;
+  if (!tgt) return null;
+
+  const x = tgt.x ?? 0;
+  const y = tgt.y ?? 0;
+  const z = tgt.z ?? 0;
+
+  const r = Math.hypot(x, y);
+  const j0 = Math.atan2(y, x);
+
+  const dz = z - BASE_Z;
+  let d = Math.hypot(r, dz);
+
+  // Reachability check with clamping so we still move toward the target.
+  const maxReach = L1 + L2 - 1e-6;
+  if (d > maxReach) {
+    const scale = maxReach / d;
+    const rClamped = r * scale;
+    const dzClamped = dz * scale;
+    d = maxReach;
+    // recompute planar components after clamping
+    const shoulderPlanar = Math.atan2(dzClamped, rClamped);
+    const cosElbowClamp = (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2);
+    const elbowClamp = Math.acos(Math.min(1, Math.max(-1, cosElbowClamp)));
+    const cosShoulderClamp = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
+    const shoulderOffsetClamp = Math.acos(Math.min(1, Math.max(-1, cosShoulderClamp)));
+    const j1 = shoulderPlanar + shoulderOffsetClamp;
+    const j2 = Math.PI - elbowClamp;
+    return [j0, j1, j2, 0, 0, 0];
+  }
+
+  // Planar 2-link IK for shoulder (j1) and elbow (j2)
+  const cosElbow = (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2);
+  const elbow = Math.acos(Math.min(1, Math.max(-1, cosElbow)));
+  const cosShoulder = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
+  const shoulderOffset = Math.acos(Math.min(1, Math.max(-1, cosShoulder)));
+  const shoulderPlanar = Math.atan2(dz, r);
+
+  const j1 = shoulderPlanar + shoulderOffset; // lift up
+  const j2 = Math.PI - elbow; // elbow down
+
+  // Simple wrist configuration pointing forward; can be extended later.
+  const j3 = 0;
+  const j4 = 0;
+  const j5 = 0;
+
+  return [j0, j1, j2, j3, j4, j5];
+}
+
+export function applyAnglesToJoints(joints, angles, robot) {
+  if (!joints || !angles) return;
+  const keys = ["j0", "j1", "j2", "j3", "j4", "j5"];
+  const map = {};
+
+  keys.forEach((key, idx) => {
+    const joint = joints[key];
+    const val = angles[idx] ?? 0;
+    if (joint?.setJointValue) joint.setJointValue(val);
+    const name = joint?.name || joint?.jointName || null;
+    if (name) map[name] = val;
+  });
+
+  if (robot?.setJointValues && Object.keys(map).length > 0) {
+    robot.setJointValues(map);
+  }
+  if (robot?.updateMatrixWorld) {
+    robot.updateMatrixWorld(true);
+  }
+}

@@ -1,0 +1,13 @@
+Dont push to github unless i tell you to,
+Dont pull from github unless i tell you to
+Always push and pull with git from my account with the email libish.1234@gmail.com
+Be brief concise and avoid long summaries and filter words in your responses to save token usage.
+Make sure the document title matches the repository name so the browser tab always shows the repo name.
+On the first gitpush make sure the default main branch is named main, do not change the name to anything else.
+Give each git commit or folder a unique description based on what the commit was about.
+Create an initial README.md which gives a paragraph summary of the project as a whole as well as a features list, geting started, and controlls at the first push commit to github.
+The README.md header should always be the same as the repository name.
+Update README.md before each push commit to github to include major new features , getting started or controls , dont update README.md with minor changes.
+Dont keep track of git commits after each instruction or git diff cacheing ,only check changes when merging and pushing to git.
+Dont compact the context unless i tell you to.
+Do not create, print, commit, or store any API keys, tokens, SSH keys, passwords, or environment secrets in files, code, or git history

@@ -1,0 +1,5 @@
+// Cursor project rules
+- Use ES modules throughout.
+- Keep URDF paths/package mappings intact for three-urdf-loader.
+- Keep kinematics deterministic (no random seeds or non-repeatable solvers).
+- Prefer React + react-three-fiber for all scene work.

@@ -1,0 +1,159 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=Chivo+Mono:wght@400;600&display=swap");
+
+:root {
+  --bg: #06080f;
+  --panel: #0f1629;
+  --panel-strong: #0c1221;
+  --accent: #6dd3ff;
+  --accent-2: #a78bfa;
+  --text: #e7ecf2;
+  --muted: #9fb1c9;
+  --border: #1e2940;
+  --success: #56e39f;
+  --danger: #ff7b95;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 10% 10%, #0b1531 0%, #06080f 40%),
+    radial-gradient(circle at 90% 90%, #102045 0%, #06080f 45%), #06080f;
+  color: var(--text);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  min-height: 100vh;
+}
+
+.panel {
+  background: linear-gradient(145deg, var(--panel) 0%, var(--panel-strong) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+}
+
+.panel h3 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+
+.flex {
+  display: flex;
+  gap: 12px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badge {
+  font-family: "Chivo Mono", monospace;
+  background: rgba(109, 211, 255, 0.08);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+button {
+  background: linear-gradient(120deg, var(--accent) 0%, #3eb5ff 100%);
+  color: #041221;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+button.secondary {
+  background: linear-gradient(120deg, #2b3753 0%, #1e2940 100%);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+input[type="number"],
+input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0c1324;
+  color: var(--text);
+}
+
+textarea {
+  width: 100%;
+  min-height: 160px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0c1324;
+  color: var(--text);
+  padding: 10px;
+  font-family: "Chivo Mono", monospace;
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.status-dot.online {
+  background: var(--success);
+}
+
+@media (max-width: 1080px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+}
