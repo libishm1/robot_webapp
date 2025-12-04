@@ -26,3 +26,5 @@ Web-based UR10e controller that runs fully in the browser: load the official URD
 - Targets are clamped to a configurable workspace radius with a base keep-out cylinder plus floor/ceiling limits.
 - Joint angles are clamped to conservative UR10e soft limits before being applied to the robot model.
 - A lightweight collision checker flags when the tool dips below the floor or enters the keep-out zone; status is shown in the UI (not a full physics engine).
+
+ .\.node\node-v24.11.1-win-x64\node.exe .\node_modules\vite\bin\vite.js --host --port 5173                              
