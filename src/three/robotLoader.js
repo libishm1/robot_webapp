@@ -6,11 +6,11 @@ export async function loadUR10e(scene) {
   const candidateUrdfs = [`${base}ur10e.urdf`, `${base}ur10e/ur10e.urdf`];
 
   const loader = new URDFLoader();
-  // Map package://ur_description/... to the meshes folder in either layout.
-  // On GH Pages the meshes live under `${base}meshes/ur10e/...`
+  // Map package://ur_description/... so package://ur_description/meshes/... resolves to `${base}meshes/...`
   loader.packages = {
-    ur_description: `${base}meshes/`,
-    ur10e: `${base}meshes/`,
+    ur_description: base,
+    ur10e: base,
+    "": base,
   };
   loader.workingPath = base;
   loader.fetchOptions = { mode: "cors" };
