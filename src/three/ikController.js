@@ -176,50 +176,95 @@ function fkPointsAndAxes(angles) {
     const pos = new THREE.Vector3().setFromMatrixPosition(tf);
     const rot = new THREE.Matrix3().setFromMatrix4(tf);
     const zAxis = new THREE.Vector3(rot.elements[2], rot.elements[5], rot.elements[8]).normalize();
-    frames.push({ pos, zAxis });
+    frames.push({ pos, zAxis, tf: tf.clone() });
   }
   return frames;
 }
 
 function ccdSolve(angles, target, opts) {
   const current = angles.slice();
-  const tgt = new THREE.Vector3(target.x, target.y, target.z);
+  const tgtPos = new THREE.Vector3(target.x, target.y, target.z);
+  const useOrientation = target.rpy != null;
+  const tgtQuat = useOrientation
+    ? new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(target.rpy.rx, target.rpy.ry, target.rpy.rz, "XYZ")
+      )
+    : null;
 
   for (let iter = 0; iter < opts.maxIter; iter++) {
     const frames = fkPointsAndAxes(current);
-    const eePos = frames[frames.length - 1].pos;
-    const errVec = new THREE.Vector3().subVectors(tgt, eePos);
-    if (errVec.length() < opts.tol) return current;
+    const eeFrame = frames[frames.length - 1];
+    const eePos = eeFrame.pos;
+    const posErr = new THREE.Vector3().subVectors(tgtPos, eePos);
+    const posErrLen = posErr.length();
+
+    let oriErrAxis = null;
+    let oriErrAngle = 0;
+    if (useOrientation) {
+      const eeQuat = new THREE.Quaternion().setFromRotationMatrix(eeFrame.tf);
+      const qErr = tgtQuat.clone().multiply(eeQuat.clone().invert());
+      qErr.normalize();
+      oriErrAngle = 2 * Math.acos(THREE.MathUtils.clamp(qErr.w, -1, 1));
+      if (oriErrAngle > Math.PI) oriErrAngle = 2 * Math.PI - oriErrAngle;
+      const s = Math.sqrt(1 - qErr.w * qErr.w);
+      if (s > 1e-6) {
+        oriErrAxis = new THREE.Vector3(qErr.x / s, qErr.y / s, qErr.z / s).normalize();
+      } else {
+        oriErrAxis = new THREE.Vector3(0, 0, 1);
+      }
+    }
+
+    if (posErrLen < opts.tol && (!useOrientation || oriErrAngle < opts.oriTol)) {
+      return current;
+    }
 
     for (let i = frames.length - 1; i >= 0; i--) {
       const jointPos = frames[i].pos;
       const axis = frames[i].zAxis;
       const vEE = new THREE.Vector3().subVectors(eePos, jointPos);
-      const vTG = new THREE.Vector3().subVectors(tgt, jointPos);
-      if (vEE.lengthSq() < 1e-9 || vTG.lengthSq() < 1e-9) continue;
+      const vTG = new THREE.Vector3().subVectors(tgtPos, jointPos);
+      let delta = 0;
 
-      // Project vectors onto plane orthogonal to axis
-      const vEEProj = vEE.clone().sub(axis.clone().multiplyScalar(vEE.dot(axis)));
-      const vTGProj = vTG.clone().sub(axis.clone().multiplyScalar(vTG.dot(axis)));
-      if (vEEProj.lengthSq() < 1e-9 || vTGProj.lengthSq() < 1e-9) continue;
+      if (vEE.lengthSq() > 1e-9 && vTG.lengthSq() > 1e-9) {
+        // Position correction
+        const vEEProj = vEE.clone().sub(axis.clone().multiplyScalar(vEE.dot(axis)));
+        const vTGProj = vTG.clone().sub(axis.clone().multiplyScalar(vTG.dot(axis)));
+        if (vEEProj.lengthSq() > 1e-9 && vTGProj.lengthSq() > 1e-9) {
+          vEEProj.normalize();
+          vTGProj.normalize();
+          const cross = new THREE.Vector3().crossVectors(vEEProj, vTGProj);
+          const dot = THREE.MathUtils.clamp(vEEProj.dot(vTGProj), -1, 1);
+          const posDelta = Math.atan2(cross.length(), dot) * Math.sign(cross.dot(axis) || 1);
+          delta += posDelta;
+        }
+      }
 
-      vEEProj.normalize();
-      vTGProj.normalize();
-      const cross = new THREE.Vector3().crossVectors(vEEProj, vTGProj);
-      const dot = THREE.MathUtils.clamp(vEEProj.dot(vTGProj), -1, 1);
-      let delta = Math.atan2(cross.length(), dot);
-      const sign = Math.sign(cross.dot(axis)) || 1;
-      delta *= sign;
+      if (useOrientation && oriErrAxis) {
+        // Orientation correction: project orientation error onto joint axis
+        const oriDelta = (oriErrAngle || 0) * (oriErrAxis.dot(axis));
+        delta += oriDelta * opts.oriWeight;
+      }
 
-      // Clamp step
-      if (delta > opts.step) delta = opts.step;
-      if (delta < -opts.step) delta = -opts.step;
+      // Clamp step adaptively
+      const step = Math.max(opts.stepMin, Math.min(opts.stepMax, Math.abs(delta))) * Math.sign(delta || 1);
+      current[i] = normalizeAngle(current[i] + step);
 
-      current[i] = normalizeAngle(current[i] + delta);
-      // Update downstream EE by recomputing quickly
+      // Update downstream EE pose quickly
       const newFrames = fkPointsAndAxes(current);
-      const newEE = newFrames[newFrames.length - 1].pos;
-      eePos.copy(newEE);
+      const newEE = newFrames[newFrames.length - 1];
+      eePos.copy(newEE.pos);
+      if (useOrientation) {
+        const eeQuatNew = new THREE.Quaternion().setFromRotationMatrix(newEE.tf);
+        const qErrNew = tgtQuat.clone().multiply(eeQuatNew.clone().invert());
+        const s = Math.sqrt(1 - qErrNew.w * qErrNew.w);
+        oriErrAngle = 2 * Math.acos(THREE.MathUtils.clamp(qErrNew.w, -1, 1));
+        if (oriErrAngle > Math.PI) oriErrAngle = 2 * Math.PI - oriErrAngle;
+        if (s > 1e-6) {
+          oriErrAxis = new THREE.Vector3(qErrNew.x / s, qErrNew.y / s, qErrNew.z / s).normalize();
+        } else {
+          oriErrAxis = new THREE.Vector3(0, 0, 1);
+        }
+      }
     }
   }
   return current;
@@ -233,7 +278,14 @@ export function createIK(mode, joints) {
       data: {
         joints,
         angles: new Array(6).fill(0),
-        opts: { maxIter: 60, tol: 1e-4, step: 0.35 }
+        opts: {
+          maxIter: 120,
+          tol: 1e-4,
+          oriTol: 1e-2,
+          stepMin: 0.01,
+          stepMax: 0.35,
+          oriWeight: 0.5
+        }
       }
     };
   }
