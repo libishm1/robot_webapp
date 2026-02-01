@@ -24,25 +24,25 @@ export function clampTargetToWorkspace(target) {
   const reasons = [];
   let clamped = false;
 
-  const r = Math.hypot(safe.x, safe.y);
+  const r = Math.hypot(safe.x, safe.z);
   if (r > radius) {
     const scale = radius / r;
     safe.x *= scale;
-    safe.y *= scale;
+    safe.z *= scale;
     clamped = true;
     reasons.push("radial limit");
   }
   if (r < keepoutRadius) {
     const scale = keepoutRadius / Math.max(r, 1e-3);
     safe.x *= scale;
-    safe.y *= scale;
+    safe.z *= scale;
     clamped = true;
     reasons.push("base keep-out");
   }
 
-  const zBefore = safe.z;
-  safe.z = clampScalar(safe.z, minZ, maxZ);
-  if (safe.z !== zBefore) {
+  const yBefore = safe.y;
+  safe.y = clampScalar(safe.y, minZ, maxZ);
+  if (safe.y !== yBefore) {
     clamped = true;
     reasons.push("vertical limit");
   }
@@ -64,7 +64,7 @@ export function checkPoseCollisions(pose) {
   if (!pose) return { collides: false, collisions: [] };
   const issues = [];
   const { position } = pose;
-  const r = Math.hypot(position.x, position.y);
+  const r = Math.hypot(position.x, position.z);
 
   if (position.y < workspace.minZ) {
     issues.push("tool under floor");
@@ -75,3 +75,4 @@ export function checkPoseCollisions(pose) {
 
   return { collides: issues.length > 0, collisions: issues };
 }
+

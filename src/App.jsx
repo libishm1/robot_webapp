@@ -95,13 +95,17 @@ export default function App() {
     setSnapTick((t) => t + 1);
   };
 
-  const handleNudge = (delta) => {
-    const next = {
-      x: target.x + (delta.x || 0) * nudgeStep,
-      y: target.y + (delta.y || 0) * nudgeStep,
-      z: target.z + (delta.z || 0) * nudgeStep,
-    };
-    handleTargetChange(next);
+    const handleNudge = (delta) => {
+    setTarget((prev) => {
+      const next = {
+        x: prev.x + (delta.x || 0) * nudgeStep,
+        y: prev.y + (delta.y || 0) * nudgeStep,
+        z: prev.z + (delta.z || 0) * nudgeStep,
+      };
+      const { clamped, reasons } = clampTargetToWorkspace(next);
+      setSafetyStatus((prevState) => ({ ...prevState, clamped, reasons }));
+      return next;
+    });
     setNudgeTick((t) => t + 1);
   };
 

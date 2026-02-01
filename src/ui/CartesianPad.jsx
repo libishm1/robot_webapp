@@ -21,21 +21,22 @@ export default function CartesianPad({ onNudge, step = 0.01, onStepChange }) {
       <div className="grid-two" style={{ alignItems: "center" }}>
         <div className="stack" style={{ alignItems: "center" }}>
           <div className="row" style={{ gap: 8 }}>
-            <button className="secondary" style={{ borderColor: "#00ff00", color: "#00ff00" }} onClick={() => move(0, step, 0)}>Y+</button>
+            <button className="secondary" style={{ borderColor: "#00ff00", color: "#00ff00" }} onClick={() => move(0, 1, 0)}>Y+</button>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="secondary" style={{ borderColor: "#ff0000", color: "#ff0000" }} onClick={() => move(-step, 0, 0)}>X-</button>
-            <button className="secondary" style={{ borderColor: "#ff0000", color: "#ff0000" }} onClick={() => move(step, 0, 0)}>X+</button>
+            <button className="secondary" style={{ borderColor: "#ff0000", color: "#ff0000" }} onClick={() => move(-1, 0, 0)}>X-</button>
+            <button className="secondary" style={{ borderColor: "#ff0000", color: "#ff0000" }} onClick={() => move(1, 0, 0)}>X+</button>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="secondary" style={{ borderColor: "#00ff00", color: "#00ff00" }} onClick={() => move(0, -step, 0)}>Y-</button>
+            <button className="secondary" style={{ borderColor: "#00ff00", color: "#00ff00" }} onClick={() => move(0, -1, 0)}>Y-</button>
           </div>
         </div>
         <div className="stack" style={{ alignItems: "center", gap: 6 }}>
-          <button className="secondary" style={{ borderColor: "#0000ff", color: "#0000ff" }} onClick={() => move(0, 0, step)}>Z+</button>
-          <button className="secondary" style={{ borderColor: "#0000ff", color: "#0000ff" }} onClick={() => move(0, 0, -step)}>Z-</button>
+          <button className="secondary" style={{ borderColor: "#0000ff", color: "#0000ff" }} onClick={() => move(0, 0, 1)}>Z+</button>
+          <button className="secondary" style={{ borderColor: "#0000ff", color: "#0000ff" }} onClick={() => move(0, 0, -1)}>Z-</button>
         </div>
       </div>
     </div>
   );
 }
+

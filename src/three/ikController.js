@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { ikUR10e } from "../kinematics/UR10eAnalyticalIK.js";
+import { Solver, Goal, DOF, urdfRobotToIKRoot, setUrdfFromIK, setIKFromUrdf } from "closed-chain-ik";
+import { ikUR10eDario } from "../kinematics/UR10eDarioIK.js";
 
 // Approximate UR10e link dimensions (meters) using URDF defaults.
 const DH = [
@@ -25,6 +26,132 @@ const DEFAULT_OPTS = {
   damping: 0.01, // lighter damping to move more freely
   stepLimit: 0.5 // larger per-iter step cap to escape shallow minima
 };
+
+const JOINT_KEYS = ["j0", "j1", "j2", "j3", "j4", "j5"];
+
+function getChildren(frame) {
+  if (!frame) return [];
+  if (Array.isArray(frame.children)) return frame.children;
+  if (frame.child) return [frame.child];
+  return [];
+}
+
+function findFrameByName(root, name) {
+  if (!root || !name) return null;
+  const stack = [root];
+  const visited = new Set();
+  while (stack.length) {
+    const frame = stack.pop();
+    if (!frame || visited.has(frame)) continue;
+    visited.add(frame);
+    if (frame.name === name) return frame;
+    const kids = getChildren(frame);
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+  return null;
+}
+
+
+function findLinkByName(root, name) {
+  if (!root || !name) return null;
+  const stack = [root];
+  const visited = new Set();
+  while (stack.length) {
+    const frame = stack.pop();
+    if (!frame || visited.has(frame)) continue;
+    visited.add(frame);
+    if (frame.isLink && frame.name === name) return frame;
+    const kids = getChildren(frame);
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+  return null;
+}
+
+function findLeafLink(root) {
+  if (!root) return null;
+  const stack = [root];
+  const visited = new Set();
+  let last = null;
+  while (stack.length) {
+    const frame = stack.pop();
+    if (!frame || visited.has(frame)) continue;
+    visited.add(frame);
+    if (frame.isLink) last = frame;
+    const kids = getChildren(frame);
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+  return last || null;
+}
+
+
+function lockRootDof(root) {
+  if (!root || !Array.isArray(root.dof)) return;
+  root.dof.forEach((d) => {
+    const v = root.getDoFValue(d);
+    root.setMinLimit(d, v);
+    root.setMaxLimit(d, v);
+  });
+}
+
+function findLeafFrame(root) {
+  if (!root) return null;
+  const stack = [root];
+  const visited = new Set();
+  let last = root;
+  while (stack.length) {
+    const frame = stack.pop();
+    if (!frame || visited.has(frame)) continue;
+    visited.add(frame);
+    last = frame;
+    const kids = getChildren(frame);
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+  return last;
+}
+
+function readJointValues(joints) {
+  return JOINT_KEYS.map((key) => joints?.[key]?.jointValue ?? 0);
+}
+
+function setGoalPosition(goal, vec) {
+  if (!goal || !vec) return;
+  if (typeof goal.setPosition === "function") {
+    goal.setPosition(vec.x, vec.y, vec.z);
+  } else if (goal.position?.set) {
+    goal.position.set(vec.x, vec.y, vec.z);
+  } else if (goal.position) {
+    goal.position.x = vec.x;
+    goal.position.y = vec.y;
+    goal.position.z = vec.z;
+  }
+}
+
+
+function normalizeAngle(angle) {
+  let a = (angle + Math.PI) % (2 * Math.PI);
+  if (a <= 0) a += 2 * Math.PI;
+  return a - Math.PI;
+}
+
+function pickClosestSolution(solutions, current) {
+  if (!solutions || solutions.length === 0) return null;
+  if (!current || current.length !== 6) return solutions[0];
+  let best = solutions[0];
+  let bestCost = Infinity;
+  solutions.forEach((sol) => {
+    let cost = 0;
+    for (let i = 0; i < 6; i++) {
+      const diff = normalizeAngle((sol[i] || 0) - (current[i] || 0));
+      cost += diff * diff;
+    }
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = sol;
+    }
+  });
+  return best;
+}
+
 
 function dhTransform(a, alpha, d, theta) {
   const cth = Math.cos(theta);
@@ -271,7 +398,72 @@ function ccdSolve(angles, target, opts) {
 }
 
 // --- Context creation -------------------------------------------------------
-export function createIK(mode, joints) {
+export function createIK(mode, joints, options = {}) {
+
+  if (mode === "closed") {
+    const robot = options.robot;
+    const endEffector = options.endEffector || null;
+    if (!robot) {
+      return { mode: "closed", data: { joints, angles: new Array(6).fill(0) } };
+    }
+    const ikRoot = urdfRobotToIKRoot(robot, true);
+    setIKFromUrdf(ikRoot, robot);
+    lockRootDof(ikRoot);
+    const endName = options.endEffectorName || endEffector?.name || "wrist_3_link";
+    const endLink = findLinkByName(ikRoot, endName) || findLeafLink(ikRoot);
+    const goal = new Goal();
+    // Translation-only goal keeps the solver focused on position nudges.
+    goal.setDoF(DOF.X, DOF.Y, DOF.Z);
+    if (endEffector) {
+      const initPos = new THREE.Vector3();
+      const initQuat = new THREE.Quaternion();
+      endEffector.getWorldPosition(initPos);
+      endEffector.getWorldQuaternion(initQuat);
+      if (typeof goal.setWorldPosition === "function") {
+        goal.setWorldPosition(initPos.x, initPos.y, initPos.z);
+      } else {
+        setGoalPosition(goal, initPos);
+      }
+      if (typeof goal.setQuaternion === "function") {
+        goal.setQuaternion(initQuat.x, initQuat.y, initQuat.z, initQuat.w);
+      }
+    }
+    if (endLink && endLink.isLink && typeof goal.makeClosure === "function") {
+      try {
+        goal.makeClosure(endLink);
+      } catch (err) {
+        // Fallback: try a leaf or skip closure to avoid crashing the app.
+        const leaf = findLeafFrame(ikRoot);
+        if (leaf && leaf !== endLink) {
+          try {
+            goal.makeClosure(leaf);
+          } catch (_) {
+            /* ignore */
+          }
+        }
+      }
+    }
+    const solver = new Solver(ikRoot);
+    solver.maxIterations = 20;
+    solver.translationStep = 0.01;
+    solver.rotationStep = 0.01;
+    solver.translationErrorClamp = 0.2;
+    solver.rotationErrorClamp = 0.2;
+    return {
+      mode: "closed",
+      data: {
+        joints,
+        robot,
+        endEffector,
+        ikRoot,
+        goal,
+        solver,
+        angles: new Array(6).fill(0),
+        smoothTarget: null,
+        smoothAlpha: 0.25,
+      },
+    };
+  }
   if (mode === "ccd") {
     return {
       mode: "ccd",
@@ -296,16 +488,49 @@ export function createIK(mode, joints) {
   return { mode: "damped", data: { joints, angles: new Array(6).fill(0), opts: { ...DEFAULT_OPTS } } };
 }
 
+
 export function solveIK(ctx, target) {
   if (!ctx) return null;
 
+  if (ctx.mode === "closed") {
+    const data = ctx.data || {};
+    if (!data.goal || !data.solver || !data.ikRoot || !data.robot) return null;
+    // Sync IK tree from current URDF pose before solving.
+    setIKFromUrdf(data.ikRoot, data.robot);
+
+    const tgt = new THREE.Vector3(target.x, target.y, target.z);
+    if (!data.smoothTarget) {
+      data.smoothTarget = tgt.clone();
+    } else {
+      data.smoothTarget.lerp(tgt, data.smoothAlpha ?? 0.25);
+    }
+    if (typeof data.goal.setWorldPosition === "function") {
+      data.goal.setWorldPosition(data.smoothTarget.x, data.smoothTarget.y, data.smoothTarget.z);
+    } else {
+      setGoalPosition(data.goal, data.smoothTarget);
+    }
+
+    if (data.endEffector && data.goal.rotationDoFCount > 0 && typeof data.goal.setQuaternion === "function") {
+      const eeQuat = new THREE.Quaternion();
+      data.endEffector.getWorldQuaternion(eeQuat);
+      data.goal.setQuaternion(eeQuat.x, eeQuat.y, eeQuat.z, eeQuat.w);
+    }
+
+    data.solver.solve();
+    setUrdfFromIK(data.robot, data.ikRoot);
+    const angles = readJointValues(data.joints);
+    data.angles = angles.slice();
+    return data.angles;
+  }
+
   if (ctx.mode === "analytic") {
-    const sols = ikUR10e({
+    const sols = ikUR10eDario({
       position: { x: target.x, y: target.y, z: target.z },
       rpy: target.rpy || { rx: 0, ry: 0, rz: 0 }
     });
     if (!sols || sols.length === 0) return null;
-    ctx.data.angles = sols[0];
+    const chosen = pickClosestSolution(sols, ctx.data.angles);
+    ctx.data.angles = (chosen || sols[0]).slice();
     return ctx.data.angles;
   }
 

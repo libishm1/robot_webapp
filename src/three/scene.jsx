@@ -54,7 +54,7 @@ function SceneContent({
     if (!ikRef.current || !jointsRef.current) return;
     const targetVec = new THREE.Vector3(pos.x, pos.y, pos.z);
     const solverTarget =
-      robotRef.current != null
+      robotRef.current != null && ikMode !== "closed"
         ? targetVec.clone().applyQuaternion(robotRef.current.quaternion.clone().invert())
         : targetVec;
     const solved = solveIK(ikRef.current, solverTarget);
@@ -109,7 +109,7 @@ function SceneContent({
   useEffect(() => {
     if (!jointsRef.current) return;
     const angles = manualAngles.current || jointAngles;
-    ikRef.current = createIK(ikMode, jointsRef.current);
+    ikRef.current = createIK(ikMode, jointsRef.current, { robot: robotRef.current, endEffector: eeRef.current });
     if (ikRef.current?.data) {
       ikRef.current.data.angles = angles.slice();
     }
@@ -117,7 +117,7 @@ function SceneContent({
   }, [ikMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (nudgeTick > 0 && ikEnabled) {
+    if (nudgeTick > 0) {
       driveJointsToTarget(target, { snapTarget: true, force: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,7 +155,7 @@ function SceneContent({
         robotRef.current = robot;
         jointsRef.current = joints;
         eeRef.current = endEffector;
-        ikRef.current = createIK(ikMode, joints);
+        ikRef.current = createIK(ikMode, joints, { robot, endEffector });
         onIkStatusChange?.("manual");
         if (endEffector) {
           const pose = poseFromObject(endEffector);
@@ -200,7 +200,7 @@ function SceneContent({
     if (ikEnabled) {
       const targetVec = new THREE.Vector3(target.x, target.y, target.z);
       const solverTarget =
-        robotRef.current != null
+        robotRef.current != null && ikMode !== "closed"
           ? targetVec.clone().applyQuaternion(robotRef.current.quaternion.clone().invert())
           : targetVec;
       const solved = solveIK(ikRef.current, solverTarget);
@@ -287,3 +287,4 @@ export default function RobotScene(props) {
     </Canvas>
   );
 }
+

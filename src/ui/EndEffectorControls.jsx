@@ -66,6 +66,7 @@ export default function EndEffectorControls({
           <select value={ikMode} onChange={(e) => onIkModeChange?.(e.target.value)} style={{ width: "100%" }}>
             <option value="damped">Damped LS (stable)</option>
             <option value="ccd">CCD (basic)</option>
+            <option value="closed">Closed-Chain (smooth)</option>
             <option value="analytic">Analytic (UR10e)</option>
           </select>
         </label>

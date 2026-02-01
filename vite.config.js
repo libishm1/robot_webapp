@@ -6,9 +6,10 @@ export default defineConfig({
   base: "/robot_webapp/",
   plugins: [react()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-    },
+    alias: [
+      { find: /^three$/, replacement: path.resolve(__dirname, "src/three/three-compat.js") },
+      { find: "@", replacement: path.resolve(__dirname, "src") },
+    ],
   },
   server: {
     port: 5173,
